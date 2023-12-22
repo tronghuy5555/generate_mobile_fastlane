@@ -1,0 +1,161 @@
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+update_fastlane
+
+default_platform(:ios)
+
+platform :ios do
+	before_all do
+		setup_circle_ci
+	end
+	# fastlane install_certificates readonly:true
+	lane :install_certificates do |options| 
+		isReadOnly = options[:readonly]
+		match(
+		  app_identifier:[
+			"put bundle id you want to build dev"
+          ],
+		  type: "development",
+		  readonly: isReadOnly,
+		)
+		match(
+		  app_identifier:[
+			"put bundle id you want to build adhoc"
+		  ],
+		  type: "adhoc",
+		  readonly: isReadOnly,
+		)
+		
+		match(
+		  app_identifier:[
+            "put bundle id you want to build appstore"
+		],
+		  type: "appstore",
+		  readonly: isReadOnly,
+		)
+	end
+
+	desc "Push a new dev build to App Distribution"
+	lane :dev do
+    	build_number = number_of_commits(all: true)
+		build_and_upload_firebase_app(ENV["APP_ID_DEV"], "dev", "dev", "adhoc", "Dev", build_number, ENV["FIREBASE_APP_ID_DEV"])
+	end
+
+	desc "Push a new staging build to App Distribution"
+	lane :staging do
+    	build_number = number_of_commits(all: true)
+		build_and_upload_firebase_app(ENV["APP_ID_STAGING"], "staging", "staging", "adhoc", "Staging", build_number, ENV["FIREBASE_APP_ID_STAGING"])
+	end
+	  
+	desc "Push a new beta build to App Distribution"
+	lane :production do
+    	build_number = number_of_commits(all: true)
+		build_and_upload_firebase_app(ENV["APP_ID_PRODUCTION"], "production", "production", "adhoc", "Production", build_number, ENV["FIREBASE_APP_ID_PRODUCTION"])
+  	end
+	  
+	desc "Push a new beta build to TestFlight"
+	lane :appstorerelease do
+    	build_number = number_of_commits(all: true)
+		build_and_upload_firebase_app(ENV["APP_ID_PRODUCTION"], "production", "appstore", "appstore", "Production", build_number, "")
+        begin
+			upload_to_testflight(
+				skip_waiting_for_build_processing: true,
+				username: ENV["FASTLANE_USER"],
+				apple_id: ENV["APPLE_ID"],
+				app_identifier: ENV["APP_ID_PRODUCTION"],
+			)
+			send_slack("Production","Testflight",build_number)
+		rescue => ex
+			puts ex
+			send_slack_errror("Production", "Testflight", build_number, ex)
+			raise ex
+		end
+  	end
+end
+
+def build_and_upload_firebase_app(app_identifier, flavor, scheme, build_type, build_name, build_number, app_id) 
+	begin
+		Dir.chdir ".." do
+			sh("flutter", "pub", "get")
+			sh("flutter", "build", "ios", "--release", "--no-codesign", "--build-number=#{build_number}", "--flavor=#{flavor}")
+		end
+		match(
+			type: build_type, 
+			app_identifier: app_identifier,
+			readonly: is_ci,
+		)
+		gym(
+			workspace: "Runner.xcworkspace", 
+			scheme: scheme,
+			include_bitcode: true,	
+			include_symbols: true,
+		)
+	
+		if (build_type != "appstore")
+			firebase_app_distribution(
+				app: app_id,
+                # Change google service here
+				googleservice_info_plist_path: "./config/#{flavor}/GoogleService-Info.plist",
+				groups: ENV["FIREBASE_DISTRIBUTION_GROUP"],
+				release_notes: git_branch
+			)
+			send_slack(build_name,"Firebase",build_number)
+		end
+		upload_dsym(flavor)
+	rescue => ex
+		puts ex
+		send_slack_errror(build_name, "Firebase", build_number, ex)
+		raise ex
+	end
+end
+
+
+def upload_dsym(flavor)
+	begin
+		dsym_path = Actions.lane_context[SharedValues::DSYM_OUTPUT_PATH]
+		upload_symbols_to_crashlytics(
+            # Change google service here
+			gsp_path: "./config/#{flavor}/GoogleService-Info.plist",
+			dsym_path: dsym_path
+	 	)
+	rescue => ex
+		puts ex
+	end
+end
+
+def send_slack(type,store,build_number)
+	slack(
+		message: "New `#{ENV["APP_NAME"]} iOS #{type}` available on #{store} 🚀🚀🚀", 
+	    slack_url: ENV["SLACK_URL_BUILD_SUCESS"],
+		payload: {  
+   			"Built Number" => build_number,
+  		},
+		default_payloads: [:git_branch, :last_git_commit_message]
+	)
+end
+
+def send_slack_errror(type,store,build_number,error)
+	if (is_ci)
+		slack(
+			message: "The `#{ENV["APP_NAME"]} iOS #{type}` for #{store} is currently having an error 😭😭😭, please check it @channel ", 
+			slack_url: ENV["SLACK_URL_BUILD_FAILED"],
+			payload: {  
+				"Built Number" => build_number,
+				"Error description" => error,
+			},
+			default_payloads: [:git_branch, :last_git_commit_message],
+			link_names: true
+		)
+	end
+end
