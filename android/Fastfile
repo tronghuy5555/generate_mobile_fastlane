@@ -64,6 +64,39 @@ def build_and_upload_firebase_app(flavor, flavor_name, build_number, app_id)
 	send_slack(flavor_name,"Firebase",build_number)
 end
 
+def build_and_upload_app_center(flavor, flavor_name, build_number) 
+	Dir.chdir ".." do
+	  sh("flutter", "pub", "get")
+	  sh("flutter", "build", "appbundle", "--build-number=#{build_number}", "--flavor=#{flavor}")
+	end
+	gradle(task: "assemble#{flavor_name}Release")
+	APK_PATH = "../build/app/outputs/apk/#{flavor}/release/app-#{flavor}-universal-release.apk"
+	appcenter_upload(
+        api_token: ENV["APPCENTER_API_TOKEN"],
+        owner_name: ENV["APPCENTER_OWNER_NAME"],
+        owner_type: "user",
+        app_name: ENV['APPCENTER_APP_NAME'],
+        file: APK_PATH,
+        notify_testers: true
+    )
+    version = appcenter_fetch_version_number(
+        api_token: ENV["APPCENTER_API_TOKEN"],
+        owner_name: ENV["APPCENTER_OWNER_NAME"],
+        app_name: ENV['APPCENTER_APP_NAME']
+    )
+    app_center_release_url = get_appcenter_release_url(version["id"])
+  	send_slack(flavor_name,"AppCenter",build_number)
+end
+
+
+def get_appcenter_release_url(id)
+	return "https://appcenter.ms/orgs/#{ENV["APPCENTER_OWNER_NAME"]}/apps/#{ENV["APPCENTER_APP_NAME"]}/distribute/releases/#{id}"
+end
+
+def gen_qrcode_url(url)
+	return "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=#{url}"
+end  
+
 def send_slack(type,store,build_number)
 	slack(
 		message: "New `#{ENV["APP_NAME"]} Android #{type}` available on #{store} 🚀🚀🚀", 
