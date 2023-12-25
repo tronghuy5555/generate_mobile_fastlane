@@ -154,12 +154,14 @@ def build_and_upload_app_center(app_identifier, flavor, scheme, build_type, buil
 				app_name: ENV['APPCENTER_APP_NAME']
 			)
     		app_center_release_url = get_appcenter_release_url(version["id"])
-			send_slack(build_name,"Firebase",build_number)
+			send_slack(build_name,"App Center",build_number, {
+				image_url: app_center_release_url
+			})
 		end
 		upload_dsym(flavor)
 	rescue => ex
 		puts ex
-		send_slack_errror(build_name, "Firebase", build_number, ex)
+		send_slack_errror(build_name, "App Center", build_number, ex)
 		raise ex
 	end
 end
@@ -186,14 +188,16 @@ def gen_qrcode_url(url)
 	return "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=#{url}"
 end  
 
-def send_slack(type,store,build_number)
+def send_slack(type,store,build_number, attachment_properties = {})
+	defaultPayload =  {  
+		"Built Number" => build_number,
+   	}
 	slack(
 		message: "New `#{ENV["APP_NAME"]} iOS #{type}` available on #{store} 🚀🚀🚀", 
 	    slack_url: ENV["SLACK_URL_BUILD_SUCESS"],
-		payload: {  
-   			"Built Number" => build_number,
-  		},
-		default_payloads: [:git_branch, :last_git_commit_message]
+		payload: defaultPayload,
+		default_payloads: [:git_branch, :last_git_commit_message],
+		attachment_properties: attachment_properties
 	)
 end
 

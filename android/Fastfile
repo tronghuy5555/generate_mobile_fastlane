@@ -33,12 +33,11 @@ platform :android do
   lane :production do
     build_number = number_of_commits(all: true)
 	build_and_upload_firebase_app("production", "Production", build_number,  ENV["FIREBASE_APP_ID_PRODUCTION"])
+	AAB_PATH = "../build/app/outputs/bundle/productionRelease/app-production-release.aab"
 	upload_to_play_store(
 		track: 'beta',
 		package_name: ENV["APP_PACKAGE_NAME"],
-		aab_paths: [
-			"../build/app/outputs/bundle/productionRelease/app-production-release.aab",
-		],
+		aab_paths: [AAB_PATH,],
 		json_key: ENV["PLAY_STORE_JSON_FILE_PATH"],
 		skip_upload_metadata: true,
 		skip_upload_changelogs: true,
@@ -55,9 +54,10 @@ def build_and_upload_firebase_app(flavor, flavor_name, build_number, app_id)
     	sh("flutter", "build", "appbundle", "--build-number=#{build_number}", "--flavor=#{flavor}")
   	end
 	gradle(task: "assemble#{flavor_name}Release")
+	APK_PATH = "../build/app/outputs/apk/#{flavor}/release/app-#{flavor}-universal-release.apk"
     firebase_app_distribution(
 		app: app_id,
-		apk_path: "../build/app/outputs/apk/#{flavor}/release/app-#{flavor}-universal-release.apk",
+		apk_path: APK_PATH,
         groups: ENV["FIREBASE_DISTRIBUTION_GROUP"],
 		release_notes: git_branch
 	)
@@ -71,6 +71,8 @@ def build_and_upload_app_center(flavor, flavor_name, build_number)
 	end
 	gradle(task: "assemble#{flavor_name}Release")
 	APK_PATH = "../build/app/outputs/apk/#{flavor}/release/app-#{flavor}-universal-release.apk"
+	# Actions.lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
+	# Actions.lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH]
 	appcenter_upload(
         api_token: ENV["APPCENTER_API_TOKEN"],
         owner_name: ENV["APPCENTER_OWNER_NAME"],
@@ -85,7 +87,9 @@ def build_and_upload_app_center(flavor, flavor_name, build_number)
         app_name: ENV['APPCENTER_APP_NAME']
     )
     app_center_release_url = get_appcenter_release_url(version["id"])
-  	send_slack(flavor_name,"AppCenter",build_number)
+	send_slack(build_name,"App Center",build_number, {
+		image_url: app_center_release_url
+	})
 end
 
 
@@ -97,14 +101,16 @@ def gen_qrcode_url(url)
 	return "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=#{url}"
 end  
 
-def send_slack(type,store,build_number)
+def send_slack(type,store,build_number, attachment_properties = {})
+	defaultPayload =  {  
+		"Built Number" => build_number,
+   	}
 	slack(
 		message: "New `#{ENV["APP_NAME"]} Android #{type}` available on #{store} 🚀🚀🚀", 
 	    slack_url: ENV["SLACK_URL_BUILD_SUCESS"],
-		payload: {  
-   			"Built Number" => build_number,
-  		},
-		default_payloads: [:git_branch, :last_git_commit_message]
+		payload: defaultPayload,
+		default_payloads: [:git_branch, :last_git_commit_message],
+		attachment_properties: attachment_properties
 	)
 end
 
