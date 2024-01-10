@@ -17,28 +17,32 @@
 default_platform(:android)
 
 platform :android do
-
+   
+  # fastlane dev build_number: [your build number] 
   desc "Submit a new Dev Build to App Distribution"
-  lane :dev do
-    build_number = number_of_commits(all: true)
-	build_and_upload_firebase_app("dev", "Dev", build_number, ENV["FIREBASE_APP_ID_DEV"])
+  lane :dev do |options|
+    build_number = get_build_number(options[:build_number])
+	# build_and_upload_firebase_app("dev", "Dev", build_number, ENV["FIREBASE_APP_ID_DEV"])
+	build_and_upload_app_center("dev", "Dev", build_number)
   end
 
   desc "Submit a new Staging Build to App Distribution"
-  lane :staging do
-    build_number = number_of_commits(all: true)
-	build_and_upload_firebase_app("staging", "Staging", build_number, ENV["FIREBASE_APP_ID_STAGING"])
+  lane :staging do |options|
+    build_number = get_build_number(options[:build_number])
+	# build_and_upload_firebase_app("staging", "Staging", build_number, ENV["FIREBASE_APP_ID_STAGING"])
+	build_and_upload_app_center("staging", "Staging", build_number)
   end
 
   desc "Submit a new Production Build to App Distribution"
-  lane :production do
-    build_number = number_of_commits(all: true)
-	build_and_upload_firebase_app("production", "Production", build_number,  ENV["FIREBASE_APP_ID_PRODUCTION"])
-	aab_path = get_flutter_aab_path("production")
+  lane :production do |options|
+    build_number = get_build_number(options[:build_number])
+	# build_and_upload_firebase_app("production", "Production", build_number,  ENV["FIREBASE_APP_ID_PRODUCTION"])
+	build_and_upload_app_center("prod", "Production", build_number,)
+	aab_paths = get_flutter_aab_path("prod")
 	upload_to_play_store(
 		track: 'beta',
 		package_name: ENV["APP_PACKAGE_NAME"],
-		aab_paths: [aab_path,],
+		aab_paths: [aab_paths,],
 		json_key: ENV["PLAY_STORE_JSON_FILE_PATH"],
 		skip_upload_metadata: true,
 		skip_upload_changelogs: true,
@@ -54,13 +58,12 @@ def build_and_upload_firebase_app(flavor, flavor_name, build_number, app_id)
     	sh("flutter", "pub", "get")
     	sh("flutter", "build", "appbundle", "--build-number=#{build_number}", "--flavor=#{flavor}")
   	end
-	#gradle(task: "assemble#{flavor_name}Release")
 	aab_path = get_flutter_aab_path(flavor)
-        firebase_app_distribution(
+    firebase_app_distribution(
 		app: app_id,
 		android_artifact_type: "AAB",
 		android_artifact_path: aab_path,
-        	groups: ENV["FIREBASE_DISTRIBUTION_GROUP"],
+        groups: ENV["FIREBASE_DISTRIBUTION_GROUP"],
 		release_notes: git_branch
 	)
 	send_slack(flavor_name,"Firebase",build_number)
@@ -71,7 +74,7 @@ def build_and_upload_app_center(flavor, flavor_name, build_number)
 	  sh("flutter", "pub", "get")
 	  sh("flutter", "build", "appbundle", "--build-number=#{build_number}", "--flavor=#{flavor}")
 	end
-	#gradle(task: "assemble#{flavor_name}Release")
+	# gradle(task: "assemble#{flavor_name}Release")
 	aab_path = get_flutter_aab_path(flavor)
 	# Actions.lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
 	# Actions.lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH]
@@ -101,13 +104,13 @@ end
 
 def gen_qrcode_url(url)
 	return "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=#{url}"
-end
+end  
 
 def get_flutter_aab_path(flavor)
 	return "../build/app/outputs/bundle/#{flavor}Release/app-#{flavor}-release.aab"
 end
 
-def get_flutter_aab_path(flavor)
+def get_flutter_apk_path(flavor)
 	return "../build/app/outputs/bundle/#{flavor}Release/app-#{flavor}-release.apk"
 end
 
@@ -122,6 +125,13 @@ def send_slack(type,store,build_number, attachment_properties = {})
 		default_payloads: [:git_branch, :last_git_commit_message],
 		attachment_properties: attachment_properties
 	)
+end
+
+def get_build_number(build_number)
+	if (build_number)
+		return build_number
+	end
+	return number_of_commits(all: true)
 end
 
 def send_slack_errror(type,store,build_number,error)
