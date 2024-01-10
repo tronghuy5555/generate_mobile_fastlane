@@ -139,13 +139,13 @@ def build_and_upload_app_center(app_identifier, flavor, scheme, build_type, buil
 		)
 	
 		if (build_type != "appstore")
-			IOS_PATH = Actions.lane_context[SharedValues::IPA_OUTPUT_PATH]
+			ipa_path = Actions.lane_context[SharedValues::IPA_OUTPUT_PATH]
 			appcenter_upload(
 				api_token: ENV["APPCENTER_API_TOKEN"],
 				owner_name: ENV["APPCENTER_OWNER_NAME"],
 				owner_type: "user",
 				app_name: ENV['APPCENTER_APP_NAME'],
-				file: IOS_PATH,
+				file: ipa_path,
 				notify_testers: true
 			)
 			version = appcenter_fetch_version_number(
