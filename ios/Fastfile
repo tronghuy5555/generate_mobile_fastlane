@@ -48,20 +48,20 @@ platform :ios do
 	end
 
 	desc "Push a new dev build to App Distribution"
-	lane :dev do
-    	build_number = number_of_commits(all: true)
+	lane :dev do |options|
+    	build_number = get_build_number(options[:build_number])
 		build_and_upload_firebase_app(ENV["APP_ID_DEV"], "dev", "dev", "adhoc", "Dev", build_number, ENV["FIREBASE_APP_ID_DEV"])
 	end
 
 	desc "Push a new staging build to App Distribution"
-	lane :staging do
-    	build_number = number_of_commits(all: true)
+	lane :staging do |options|
+    	build_number = get_build_number(options[:build_number])
 		build_and_upload_firebase_app(ENV["APP_ID_STAGING"], "staging", "staging", "adhoc", "Staging", build_number, ENV["FIREBASE_APP_ID_STAGING"])
 	end
 	  
 	desc "Push a new beta build to App Distribution"
-	lane :production do
-    	build_number = number_of_commits(all: true)
+	lane :production do |options|
+    	build_number = get_build_number(options[:build_number])
 		build_and_upload_firebase_app(ENV["APP_ID_PRODUCTION"], "production", "production", "adhoc", "Production", build_number, ENV["FIREBASE_APP_ID_PRODUCTION"])
   	end
 	  
@@ -187,7 +187,14 @@ end
 
 def gen_qrcode_url(url)
 	return "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=#{url}"
-end  
+end
+
+def get_build_number(build_number)
+	if (build_number)
+		return build_number
+	end
+	return number_of_commits(all: true)
+end
 
 def send_slack(type,store,build_number, attachment_properties = {})
 	defaultPayload =  {  
