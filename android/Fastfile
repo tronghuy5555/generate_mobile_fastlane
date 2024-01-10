@@ -37,7 +37,7 @@ platform :android do
   lane :production do |options|
     build_number = get_build_number(options[:build_number])
 	# build_and_upload_firebase_app("production", "Production", build_number,  ENV["FIREBASE_APP_ID_PRODUCTION"])
-	run_flutter_build(flavor, build_number, "aab")
+	run_flutter_build(flavor, build_number, "appbunde")
 	aab_paths = get_flutter_aab_path("prod")
 	upload_to_play_store(
 		track: 'beta',
@@ -86,7 +86,7 @@ def build_and_upload_app_center(flavor, flavor_name, build_number)
         app_name: ENV['APPCENTER_APP_NAME']
     )
     app_center_release_url = get_appcenter_release_url(version["id"])
-	send_slack(build_name,"App Center",build_number, {
+	send_slack(flavor_name,"App Center",build_number, {
 		image_url: app_center_release_url
 	})
 end
