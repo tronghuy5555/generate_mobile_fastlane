@@ -53,12 +53,13 @@ def build_and_upload_firebase_app(flavor, flavor_name, build_number, app_id)
     	sh("flutter", "pub", "get")
     	sh("flutter", "build", "appbundle", "--build-number=#{build_number}", "--flavor=#{flavor}")
   	end
-	gradle(task: "assemble#{flavor_name}Release")
-	apk_path = "../build/app/outputs/apk/#{flavor}/release/app-#{flavor}-universal-release.apk"
-    firebase_app_distribution(
+	#gradle(task: "assemble#{flavor_name}Release")
+	aab_path = get_flutter_aab_path(flavor)
+        firebase_app_distribution(
 		app: app_id,
-		apk_path: apk_path,
-        groups: ENV["FIREBASE_DISTRIBUTION_GROUP"],
+		android_artifact_type: "AAB",
+		android_artifact_path: aab_path,
+        	groups: ENV["FIREBASE_DISTRIBUTION_GROUP"],
 		release_notes: git_branch
 	)
 	send_slack(flavor_name,"Firebase",build_number)
@@ -69,8 +70,8 @@ def build_and_upload_app_center(flavor, flavor_name, build_number)
 	  sh("flutter", "pub", "get")
 	  sh("flutter", "build", "appbundle", "--build-number=#{build_number}", "--flavor=#{flavor}")
 	end
-	gradle(task: "assemble#{flavor_name}Release")
-	apk_path = "../build/app/outputs/apk/#{flavor}/release/app-#{flavor}-universal-release.apk"
+	#gradle(task: "assemble#{flavor_name}Release")
+	aab_path = get_flutter_aab_path(flavor)
 	# Actions.lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
 	# Actions.lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH]
 	appcenter_upload(
@@ -78,7 +79,7 @@ def build_and_upload_app_center(flavor, flavor_name, build_number)
         owner_name: ENV["APPCENTER_OWNER_NAME"],
         owner_type: "user",
         app_name: ENV['APPCENTER_APP_NAME'],
-        file: apk_path,
+        file: aab_path,
         notify_testers: true
     )
     version = appcenter_fetch_version_number(
@@ -99,7 +100,15 @@ end
 
 def gen_qrcode_url(url)
 	return "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=#{url}"
-end  
+end
+
+def get_flutter_aab_path(flavor)
+	return "../build/app/outputs/bundle/#{flavor}Release/app-#{flavor}-release.aab"
+end
+
+def get_flutter_aab_path(flavor)
+	return "../build/app/outputs/bundle/#{flavor}Release/app-#{flavor}-release.apk"
+end
 
 def send_slack(type,store,build_number, attachment_properties = {})
 	defaultPayload =  {  
