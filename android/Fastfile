@@ -37,7 +37,7 @@ platform :android do
   lane :production do |options|
     build_number = get_build_number(options[:build_number])
 	# build_and_upload_firebase_app("production", "Production", build_number,  ENV["FIREBASE_APP_ID_PRODUCTION"])
-	build_and_upload_app_center("prod", "Production", build_number,)
+	run_flutter_build(flavor, build_number, "aab")
 	aab_paths = get_flutter_aab_path("prod")
 	upload_to_play_store(
 		track: 'beta',
@@ -54,28 +54,22 @@ platform :android do
 end
 
 def build_and_upload_firebase_app(flavor, flavor_name, build_number, app_id) 
-  	Dir.chdir ".." do
-    	sh("flutter", "pub", "get")
-    	sh("flutter", "build", "appbundle", "--build-number=#{build_number}", "--flavor=#{flavor}")
-  	end
-	aab_path = get_flutter_aab_path(flavor)
+  	run_flutter_build(flavor, build_number, "apk")
+	android_file_path = get_flutter_apk_path(flavor)
     firebase_app_distribution(
 		app: app_id,
-		android_artifact_type: "AAB",
-		android_artifact_path: aab_path,
+		android_artifact_type: "APK",
+		android_artifact_path: android_file_path,
         groups: ENV["FIREBASE_DISTRIBUTION_GROUP"],
 		release_notes: git_branch
 	)
 	send_slack(flavor_name,"Firebase",build_number)
 end
 
-def build_and_upload_app_center(flavor, flavor_name, build_number) 
-	Dir.chdir ".." do
-	  sh("flutter", "pub", "get")
-	  sh("flutter", "build", "appbundle", "--build-number=#{build_number}", "--flavor=#{flavor}")
-	end
+def build_and_upload_app_center(flavor, flavor_name, build_number)
+	run_flutter_build(flavor, build_number, "apk")
 	# gradle(task: "assemble#{flavor_name}Release")
-	aab_path = get_flutter_aab_path(flavor)
+	android_file_path = get_flutter_apk_path(flavor)
 	# Actions.lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
 	# Actions.lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH]
 	appcenter_upload(
@@ -83,7 +77,7 @@ def build_and_upload_app_center(flavor, flavor_name, build_number)
         owner_name: ENV["APPCENTER_OWNER_NAME"],
         owner_type: "user",
         app_name: ENV['APPCENTER_APP_NAME'],
-        file: aab_path,
+        file: android_file_path,
         notify_testers: true
     )
     version = appcenter_fetch_version_number(
@@ -96,7 +90,12 @@ def build_and_upload_app_center(flavor, flavor_name, build_number)
 		image_url: app_center_release_url
 	})
 end
-
+def run_flutter_build(flavor, build_number, file_type)
+	Dir.chdir ".." do
+		sh("flutter", "pub", "get")
+		sh("flutter", "build", "#{file_type}", "--build-number=#{build_number}", "--flavor=#{flavor}")
+	end
+end 
 
 def get_appcenter_release_url(id)
 	return "https://appcenter.ms/orgs/#{ENV["APPCENTER_OWNER_NAME"]}/apps/#{ENV["APPCENTER_APP_NAME"]}/distribute/releases/#{id}"
